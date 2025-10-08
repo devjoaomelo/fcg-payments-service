@@ -1,3 +1,6 @@
+using Amazon;
+using Amazon.SimpleNotificationService;
+using Amazon.SQS;
 using FCG.Payments.Application.Interfaces;
 using FCG.Payments.Application.UseCases.Confirm;
 using FCG.Payments.Application.UseCases.Create;
@@ -6,6 +9,7 @@ using FCG.Payments.Application.UseCases.List;
 using FCG.Payments.Domain.Interfaces;
 using FCG.Payments.Infra.Clients;
 using FCG.Payments.Infra.Data;
+using FCG.Payments.Infra.Messaging;
 using FCG.Payments.Infra.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +21,19 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+#region AWS SNS
+builder.Services.AddSingleton<IAmazonSimpleNotificationService>(_ =>
+{
+    var region = builder.Configuration["AWS:Region"] ?? "us-east-2";
+    return new AmazonSimpleNotificationServiceClient(RegionEndpoint.GetBySystemName(region));
+});
+builder.Services.AddSingleton<INotificationPublisher, SnsNotificationPublisher>();
+#endregion
+
+builder.Services.AddScoped<IEventStore, EventStoreEf>();
+builder.Services.AddScoped<IMessageBus, SqsMessageBus>();
+builder.Services.AddScoped<IGamesCatalogClient, GamesCatalogClient>();
+builder.Services.AddScoped<IPaymentRepository, MySqlPaymentRepository>();
 
 // Handlers
 builder.Services.AddScoped<CreatePaymentHandler>();
@@ -92,6 +109,16 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
+#region AWS SQS
+builder.Services.AddSingleton<IAmazonSQS>(_ =>
+{
+    var region = builder.Configuration["AWS:Region"] ?? "us-east-2";
+    return new AmazonSQSClient(RegionEndpoint.GetBySystemName(region));
+});
+#endregion
+
+builder.Services.AddSingleton<IMessageBus, SqsMessageBus>();
+
 
 var app = builder.Build();
 
@@ -115,13 +142,17 @@ app.MapPost("/api/payments", async (
     CreatePaymentRequest req,
     CreatePaymentHandler handler,
     ClaimsPrincipal user,
+    IConfiguration cfg,
     CancellationToken ct) =>
 {
-    var res = await handler.Handle(req, user, ct);
+    var queueUrl = cfg["Queues:PaymentsRequested"]
+                 ?? throw new InvalidOperationException("Queues:PaymentsRequested not configured");
+
+    var res = await handler.Handle(req, user, queueUrl, ct);
     return Results.Created($"/api/payments/{res.Id}", res);
 })
-.WithTags("User Payments")
-.WithSummary("Cria um pagamento pendente com o valor do game")
+.WithTags("Payments")
+.WithSummary("Cria um pagamento pendente com valor do Games")
 .RequireAuthorization();
 
 app.MapGet("/api/payments/{id:guid}", async (
@@ -161,6 +192,23 @@ app.MapGet("/api/payments", async (
 .WithTags("Admin Payments")
 .WithSummary("Lista todos os pagamentos")
 .RequireAuthorization("AdminOnly");
+
+app.MapPost("/internal/payments/{id}/confirm", async (
+    Guid id,
+    HttpRequest request,
+    IConfiguration config,
+    ConfirmPaymentHandler handler,
+    CancellationToken ct) =>
+{
+    var token = request.Headers["X-Internal-Token"].FirstOrDefault();
+    var expected = config["InternalAuth:Token"];
+
+    if (token != expected)
+        return Results.Unauthorized();
+
+    var ok = await handler.Handle(new ConfirmPaymentRequest(id), ct);
+    return ok ? Results.NoContent() : Results.NotFound();
+});
 
 using (var scope = app.Services.CreateScope())
 {
