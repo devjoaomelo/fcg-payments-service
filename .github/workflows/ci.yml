@@ -1,0 +1,61 @@
+name: CI - Build & Test
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            8.0.x
+          cache: true
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --no-restore --configuration Release
+
+      # Executa TODOS os projetos de teste encontrados na solução
+      - name: Test (with coverage)
+        run: |
+          dotnet test --no-build --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutput=TestResults/coverage.info \
+            /p:CoverletOutputFormat=lcov
+
+      # Artefato com os relatórios lcov gerados por cada projeto de teste
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: "**/TestResults/coverage.info"
+
+      # (Opcional) Gera HTML legível da cobertura e publica como artifact separado
+      - name: Install reportgenerator
+        run: dotnet tool update -g dotnet-reportgenerator-globaltool
+
+      - name: Merge & HTML report
+        run: |
+          reportgenerator \
+            -reports:**/TestResults/coverage.info \
+            -targetdir:CoverageReport \
+            -reporttypes:Html
+
+      - name: Upload HTML coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: CoverageReport
