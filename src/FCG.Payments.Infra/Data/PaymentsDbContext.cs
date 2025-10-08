@@ -8,6 +8,7 @@ namespace FCG.Payments.Infra.Data;
 public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> options) : DbContext(options)
 {
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<EventRecord> Events => Set<EventRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +53,34 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.GameId);
             e.HasIndex(x => new { x.UserId, x.Status });
+        });
+
+        modelBuilder.Entity<EventRecord>(entity =>
+        {
+            entity.ToTable("event_store");
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .IsRequired();
+
+            entity.Property(e => e.AggregateId)
+                .HasColumnName("aggregate_id")
+                .IsRequired();
+
+            entity.Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.Data)
+                .HasColumnName("data")
+                .HasColumnType("json")
+                .IsRequired();
+
+            entity.Property(e => e.CreatedAtUtc)
+                .HasColumnName("created_at_utc")
+                .IsRequired();
         });
     }
 }
