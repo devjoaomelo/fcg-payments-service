@@ -25,6 +25,18 @@ public sealed class Payment
         Amount = amount;
     }
 
+    public bool Confirm()
+    {
+        if(Status == PaymentStatus.Paid)
+        {
+            return false;
+        }
+
+        Status = PaymentStatus.Paid;
+        UpdatedAtUtc = DateTime.UtcNow;
+        return true;
+    }
+
     public void MarkPaid()
     {
         Status = PaymentStatus.Paid;
