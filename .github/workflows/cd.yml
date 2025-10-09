@@ -17,6 +17,8 @@ jobs:
       TASKDEF_FAMILY: fcg-payments-task
       CONTAINER_NAME: app
       IMAGE_TAG: ${{ github.sha }}
+      CLUSTER_ARN: arn:aws:ecs:us-east-2:536765581095:cluster/fcg-cluster
+      SERVICE_ARN: arn:aws:ecs:us-east-2:536765581095:service/fcg-cluster/fcg-payments-svc
 
     steps:
       - name: Checkout

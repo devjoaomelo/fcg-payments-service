@@ -122,7 +122,8 @@ builder.Services.AddSingleton<IMessageBus, SqsMessageBus>();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+/*
+ * if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -130,6 +131,18 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+ */
+
+var enableSwagger = builder.Configuration.GetValue<bool>("Swagger:EnableUI", false);
+if (enableSwagger)
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "FCG API v1");
+        c.RoutePrefix = "swagger";
+    });
+}
 
 
 // Health
