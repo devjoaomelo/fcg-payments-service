@@ -1,0 +1,60 @@
+name: CD
+on:
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-2
+  AWS_ACCOUNT_ID: "536765581095"
+
+  ECR_REPO: fcg-payments            
+  SERVICE_NAME: fcg-payments-svc 
+  CLUSTER_NAME: fcg-cluster
+  TASKDEF_FAMILY: fcg-payments-task
+  CONTAINER_NAME: app
+  IMAGE_TAG: ${{ github.sha }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (Access Keys)
+        if: ${{ env.AWS_ACCESS_KEY_ID }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push to ECR
+        run: |
+          ECR_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}
+          docker build -t ${ECR_URI}:${IMAGE_TAG} -t ${ECR_URI}:latest .
+          docker push ${ECR_URI}:${IMAGE_TAG}
+          docker push ${ECR_URI}:latest
+
+      - name: Render task definition with new image
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ./.aws/ecs-taskdef.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ env.IMAGE_TAG }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.SERVICE_NAME }}
+          cluster: ${{ env.CLUSTER_NAME }}
+          wait-for-service-stability: true
