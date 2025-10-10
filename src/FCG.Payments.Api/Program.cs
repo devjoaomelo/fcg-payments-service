@@ -40,12 +40,16 @@ builder.Services.AddScoped<IEventStore, EventStoreEf>();
 builder.Services.AddScoped<IMessageBus, SqsMessageBus>();
 builder.Services.AddScoped<IGamesCatalogClient, GamesCatalogClient>();
 builder.Services.AddScoped<IPaymentRepository, MySqlPaymentRepository>();
+builder.Services.AddScoped<IPaymentReadRepository, PaymentReadRepository>();
+
+
 
 // Handlers
 builder.Services.AddScoped<CreatePaymentHandler>();
 builder.Services.AddScoped<ConfirmPaymentHandler>();
 builder.Services.AddScoped<GetPaymentHandler>();
 builder.Services.AddScoped<ListPaymentsHandler>();
+builder.Services.AddScoped<GetPaymentHandler>();
 
 // DbContext + Repo
 builder.Services.AddDbContext<PaymentsDbContext>(opt =>
@@ -228,6 +232,19 @@ app.MapPost("/internal/payments/{id}/confirm", async (
     var ok = await handler.Handle(new ConfirmPaymentRequest(id), ct);
     return ok ? Results.NoContent() : Results.NotFound();
 });
+
+app.MapGet("/api/payments/{id:guid}", async (
+    Guid id,
+    GetPaymentHandler handler,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var res = await handler.Handle(id, http.User, ct);
+    return res is null ? Results.NotFound() : Results.Ok(res);
+})
+.WithTags("User Payments")
+.WithSummary("Lista payment por id")
+.RequireAuthorization();
 
 using (var scope = app.Services.CreateScope())
 {
