@@ -15,11 +15,23 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Trace;
+using Serilog;
+using Serilog.Context;
+using System.Reflection;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
+    .Enrich.WithProperty("Version", Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0")
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 #region AWS SNS
 builder.Services.AddSingleton<IAmazonSimpleNotificationService>(_ =>
@@ -35,6 +47,9 @@ builder.Services.AddSingleton<IAmazonSQS>(_ =>
     return new AmazonSQSClient(RegionEndpoint.GetBySystemName(region));
 });
 #endregion
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<PaymentsDbContext>(name: "mysql-payments-db");
 
 builder.Services.AddScoped<IEventStore, EventStoreEf>();
 builder.Services.AddScoped<IMessageBus, SqsMessageBus>();
@@ -129,17 +144,79 @@ builder.Services.AddSingleton<IAmazonSQS>(_ =>
 
 builder.Services.AddSingleton<IMessageBus, SqsMessageBus>();
 
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t =>
+    {
+        t.AddAspNetCoreInstrumentation(o =>
+        {
+            o.RecordException = true;
+            o.Filter = ctx => true;
+        })
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation(o =>
+        {
+            o.SetDbStatementForText = true;
+            o.EnrichWithIDbCommand = (activity, command) =>
+            {
+                activity?.SetTag("db.command", command.CommandText?.Split(' ').FirstOrDefault());
+            };
+        })
+        .AddConsoleExporter();
+    });
 
 var app = builder.Build();
 
-/*
- * if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
- */
+app.MapHealthChecks("/health/db");
 
+
+
+    /*
+     * if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+     */
+
+    app.Use(async (ctx, next) =>
+{
+    const string header = "X-Correlation-ID";
+    if (!ctx.Request.Headers.TryGetValue(header, out var cid) || string.IsNullOrWhiteSpace(cid))
+        cid = Guid.NewGuid().ToString();
+
+    ctx.Response.Headers[header] = cid!;
+    using (LogContext.PushProperty("CorrelationId", cid!.ToString()))
+    using (LogContext.PushProperty("UserId",
+           ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+           ctx.User.FindFirst("sub")?.Value ?? string.Empty))
+    {
+        await next();
+    }
+});
+
+app.UseExceptionHandler(a => a.Run(async context =>
+{
+    var problem = new { title = "Unexpected error", status = 500, traceId = context.TraceIdentifier };
+    Log.Error("Unhandled exception. TraceId={TraceId}", problem.traceId);
+    context.Response.StatusCode = 500;
+    await context.Response.WriteAsJsonAsync(problem);
+}));
+
+app.UseSerilogRequestLogging(opts =>
+{
+    opts.GetLevel = (httpCtx, elapsed, ex) =>
+        ex != null || httpCtx.Response.StatusCode >= 500
+            ? Serilog.Events.LogEventLevel.Error
+            : Serilog.Events.LogEventLevel.Information;
+
+    opts.EnrichDiagnosticContext = (diag, ctx) =>
+    {
+        diag.Set("RequestPath", ctx.Request.Path);
+        diag.Set("QueryString", ctx.Request.QueryString.Value);
+        diag.Set("UserAgent", ctx.Request.Headers["User-Agent"].ToString());
+        diag.Set("ClientIP", ctx.Connection.RemoteIpAddress?.ToString());
+    };
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
