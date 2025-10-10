@@ -181,14 +181,14 @@ app.MapPost("/api/payments", async (
 app.MapGet("/api/payments/{id:guid}", async (
     Guid id,
     GetPaymentHandler handler,
-    ClaimsPrincipal user,
+    HttpContext http,
     CancellationToken ct) =>
 {
-    var res = await handler.Handle(id, user, ct);
-    return res is null ? Results.Forbid() : Results.Ok(res);
+    var res = await handler.Handle(id, http.User, ct);
+    return res is null ? Results.NotFound() : Results.Ok(res);
 })
 .WithTags("User Payments")
-.WithSummary("Obtem pagamento por Id")
+.WithSummary("Lista payment por id")
 .RequireAuthorization();
 
 // Admin
@@ -232,19 +232,6 @@ app.MapPost("/internal/payments/{id}/confirm", async (
     var ok = await handler.Handle(new ConfirmPaymentRequest(id), ct);
     return ok ? Results.NoContent() : Results.NotFound();
 });
-
-app.MapGet("/api/payments/{id:guid}", async (
-    Guid id,
-    GetPaymentHandler handler,
-    HttpContext http,
-    CancellationToken ct) =>
-{
-    var res = await handler.Handle(id, http.User, ct);
-    return res is null ? Results.NotFound() : Results.Ok(res);
-})
-.WithTags("User Payments")
-.WithSummary("Lista payment por id")
-.RequireAuthorization();
 
 using (var scope = app.Services.CreateScope())
 {
