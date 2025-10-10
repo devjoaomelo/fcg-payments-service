@@ -28,6 +28,12 @@ builder.Services.AddSingleton<IAmazonSimpleNotificationService>(_ =>
     return new AmazonSimpleNotificationServiceClient(RegionEndpoint.GetBySystemName(region));
 });
 builder.Services.AddSingleton<INotificationPublisher, SnsNotificationPublisher>();
+
+builder.Services.AddSingleton<IAmazonSQS>(_ =>
+{
+    var region = builder.Configuration["AWS:Region"] ?? "us-east-2";
+    return new AmazonSQSClient(RegionEndpoint.GetBySystemName(region));
+});
 #endregion
 
 builder.Services.AddScoped<IEventStore, EventStoreEf>();
@@ -153,15 +159,15 @@ app.MapGet("/version", () => new { service = "fcg-payments-service", version = "
 // Users (autenticado)
 app.MapPost("/api/payments", async (
     CreatePaymentRequest req,
-    CreatePaymentHandler handler,
     ClaimsPrincipal user,
     IConfiguration cfg,
+    CreatePaymentHandler handler,
     CancellationToken ct) =>
 {
-    var queueUrl = cfg["Queues:PaymentsRequested"]
-                 ?? throw new InvalidOperationException("Queues:PaymentsRequested not configured");
-
-    var res = await handler.Handle(req, user, queueUrl, ct);
+    var queueUrl = cfg["Queues:PaymentsRequested"];
+    if(string.IsNullOrWhiteSpace(queueUrl))
+        throw new InvalidOperationException("Queue URL not configured (PaymentsRequested).");
+    var res = await handler.Handle(req, user, queueUrl!, ct);
     return Results.Created($"/api/payments/{res.Id}", res);
 })
 .WithTags("Payments")
