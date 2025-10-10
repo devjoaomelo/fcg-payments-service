@@ -138,10 +138,11 @@ var app = builder.Build();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+ */
+
 
 app.UseAuthentication();
 app.UseAuthorization();
- */
 
 var enableSwagger = builder.Configuration.GetValue<bool>("Swagger:EnableUI", false);
 if (enableSwagger)
@@ -153,6 +154,7 @@ if (enableSwagger)
         c.RoutePrefix = "swagger";
     });
 }
+
 
 
 // Health
