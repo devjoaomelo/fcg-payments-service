@@ -16,7 +16,7 @@ A **FCG.Payments.Api** é o microserviço responsável pelo processamento de pag
 
 ##  Arquitetura
 
-
+<img width="1009" height="662" alt="image" src="https://github.com/user-attachments/assets/ab78cbb2-c1b3-4283-94dd-5e9121720985" />
 
 
 ###  Estrutura do Projeto (Clean Architecture)
