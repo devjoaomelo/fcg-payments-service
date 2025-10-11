@@ -17,6 +17,8 @@ A **FCG.Payments.Api** é o microserviço responsável pelo processamento de pag
 ##  Arquitetura
 
 
+
+
 ###  Estrutura do Projeto (Clean Architecture)
 
 ```
@@ -377,6 +379,11 @@ curl -X POST http://localhost:8083/api/payments \
 ```
 
 ##  Observabilidade
+
+### Dashboard CloudWatch
+
+<img width="1910" height="791" alt="Captura de tela 2025-10-10 220013" src="https://github.com/user-attachments/assets/721bbe49-46d7-4060-9e89-11fc56fd6e64" />
+
 
 ### Logs Estruturados (Serilog)
 
