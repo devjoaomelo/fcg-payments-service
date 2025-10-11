@@ -26,7 +26,7 @@ FCG.Payments/
 │   │   ├── Program.cs                 # Bootstrap, DI, Endpoints
 │   │   └── appsettings.json
 │   │
-│   ├── FCG.Payments.Application/      # 💼 Application Layer
+│   ├── FCG.Payments.Application/      # Application Layer
 │   │   ├── UseCases/
 │   │   │   ├── Create/                # Criar pagamento
 │   │   │   │   └── CreatePaymentHandler.cs
@@ -75,7 +75,7 @@ FCG.Payments/
 │       ├── cd.yml                    # Deploy automático ECS
 │       └── docker.yml                # Docker Hub
 └── lambda/
-    └── payment-processor/            # ⚡ Lambda Function
+    └── payment-processor/            #  Lambda Function
         └── index.js                  # Handler SQS → MySQL → SNS
 ```
 
@@ -258,7 +258,7 @@ arn:aws:ssm:us-east-2:536765581095:parameter/fcg/payments/InternalAuth__Token
 
 ##  Desenvolvimento Local
 
-### 🐳 Executar com Docker Compose
+###  Executar com Docker Compose
 
 ```bash
 # Subir infraestrutura local
