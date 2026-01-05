@@ -249,12 +249,12 @@ if (enableSwagger)
 
 
 // Health
-app.MapGet("/", () => new { service = "fcg-payments-service", status = "ok" }).WithTags("Health");
+app.MapGet("/status", () => new { service = "fcg-payments-service", status = "ok" }).WithTags("Health");
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" })).WithTags("Health");
 app.MapGet("/version", () => new { service = "fcg-payments-service", version = "1.0.0" }).WithTags("Health");
 
 // Users (autenticado)
-app.MapPost("/api/payments", async (
+app.MapPost("/", async (
     CreatePaymentRequest req,
     ClaimsPrincipal user,
     IConfiguration cfg,
@@ -265,13 +265,13 @@ app.MapPost("/api/payments", async (
     if(string.IsNullOrWhiteSpace(queueUrl))
         throw new InvalidOperationException("Queue URL not configured (PaymentsRequested).");
     var res = await handler.Handle(req, user, queueUrl!, ct);
-    return Results.Created($"/api/payments/{res.Id}", res);
+    return Results.Created($"/{res.Id}", res);
 })
 .WithTags("Payments")
 .WithSummary("Cria um pagamento pendente com valor do Games")
 .RequireAuthorization();
 
-app.MapGet("/api/payments/{id:guid}", async (
+app.MapGet("/{id:guid}", async (
     Guid id,
     GetPaymentHandler handler,
     HttpContext http,
@@ -285,7 +285,7 @@ app.MapGet("/api/payments/{id:guid}", async (
 .RequireAuthorization();
 
 // Admin
-app.MapPost("/api/payments/{id:guid}/confirm", async (
+app.MapPost("/{id:guid}/confirm", async (
     Guid id,
     ConfirmPaymentHandler handler,
     CancellationToken ct) =>
@@ -297,7 +297,7 @@ app.MapPost("/api/payments/{id:guid}/confirm", async (
 .WithSummary("Confirma pagamento por Id")
 .RequireAuthorization("AdminOnly");
 
-app.MapGet("/api/payments", async (
+app.MapGet("/", async (
     int page, int size,
     ListPaymentsHandler handler,
     CancellationToken ct) =>
@@ -309,7 +309,7 @@ app.MapGet("/api/payments", async (
 .WithSummary("Lista todos os pagamentos")
 .RequireAuthorization("AdminOnly");
 
-app.MapPost("/internal/payments/{id}/confirm", async (
+app.MapPost("/internal/{id}/confirm", async (
     Guid id,
     HttpRequest request,
     IConfiguration config,
