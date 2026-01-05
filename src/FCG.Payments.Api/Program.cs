@@ -178,6 +178,8 @@ builder.Services.AddOpenTelemetry()
 
 var app = builder.Build();
 
+app.UsePathBase("/api/payments");
+
 app.MapHealthChecks("/health/db");
 
 
