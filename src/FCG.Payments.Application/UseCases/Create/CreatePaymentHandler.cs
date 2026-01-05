@@ -26,6 +26,10 @@ public sealed class CreatePaymentHandler(
         if (string.IsNullOrWhiteSpace(paymentsRequestedQueueUrl))
             throw new InvalidOperationException("Queue URL not configured (PaymentsRequested).");
 
+        if (!paymentsRequestedQueueUrl.StartsWith("https://sqs."))
+            throw new InvalidOperationException(
+                $"Invalid SQS queue URL format: {paymentsRequestedQueueUrl}");
+
         ct.ThrowIfCancellationRequested();
 
         var userIdStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value

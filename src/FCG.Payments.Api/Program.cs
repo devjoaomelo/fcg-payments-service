@@ -80,6 +80,7 @@ builder.Services.AddHttpClient<IGamesCatalogClient, GamesCatalogClient>(c =>
 {
     // Em dev local use http://localhost:8082 ; em Docker use http://fcg-games:8080
     c.BaseAddress = new Uri(builder.Configuration["GamesApi:BaseUrl"] ?? "http://fcg-games:8080");
+    c.Timeout = TimeSpan.FromSeconds(10);
 });
 
 // Swagger

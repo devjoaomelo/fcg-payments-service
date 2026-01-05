@@ -47,8 +47,15 @@ public sealed class ConfirmPaymentHandler(
 
         var topicArn = cfg["Notifications:TopicArn"]
             ?? throw new InvalidOperationException("Notifications:TopicArn not configured");
+        try
+        {
+            await notifier.PublishAsync(topicArn, evt, ct);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Payment confirmed but notification failed. PaymentId: {payment.Id}", ex);
+        }
 
-        await notifier.PublishAsync(topicArn, evt, ct);
         return true;
     }
 }
