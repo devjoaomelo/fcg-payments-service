@@ -12,6 +12,7 @@ using FCG.Payments.Infra.Data;
 using FCG.Payments.Infra.Messaging;
 using FCG.Payments.Infra.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -210,8 +211,11 @@ app.MapHealthChecks("/health/db");
 
 app.UseExceptionHandler(a => a.Run(async context =>
 {
+    var exceptionHandlerPathFeature = context.Features.Get<IExceptionHandlerPathFeature>();
+    var exception = exceptionHandlerPathFeature?.Error;
+
     var problem = new { title = "Unexpected error", status = 500, traceId = context.TraceIdentifier };
-    Log.Error("Unhandled exception. TraceId={TraceId}", problem.traceId);
+    Log.Error(exception, "Unhandled exception. TraceId={TraceId}", problem.traceId);  // ? CORRIGIDO
     context.Response.StatusCode = 500;
     await context.Response.WriteAsJsonAsync(problem);
 }));
@@ -261,11 +265,29 @@ app.MapPost("/", async (
     CreatePaymentHandler handler,
     CancellationToken ct) =>
 {
-    var queueUrl = cfg["Queues:PaymentsRequested"];
-    if(string.IsNullOrWhiteSpace(queueUrl))
-        throw new InvalidOperationException("Queue URL not configured (PaymentsRequested).");
-    var res = await handler.Handle(req, user, queueUrl!, ct);
-    return Results.Created($"/{res.Id}", res);
+    try
+    {
+        var queueUrl = cfg["Queues:PaymentsRequested"];
+        if (string.IsNullOrWhiteSpace(queueUrl))
+            throw new InvalidOperationException("Queue URL not configured (PaymentsRequested).");
+
+        var res = await handler.Handle(req, user, queueUrl!, ct);
+        return Results.Created($"/{res.Id}", res);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("=== ENDPOINT EXCEPTION ===");
+        Console.WriteLine($"Type: {ex.GetType().FullName}");
+        Console.WriteLine($"Message: {ex.Message}");
+        Console.WriteLine($"StackTrace: {ex.StackTrace}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"InnerException: {ex.InnerException.GetType().FullName}");
+            Console.WriteLine($"InnerMessage: {ex.InnerException.Message}");
+        }
+        Console.WriteLine("=== END ENDPOINT EXCEPTION ===");
+        throw; // Re-throw
+    }
 })
 .WithTags("Payments")
 .WithSummary("Cria um pagamento pendente com valor do Games")

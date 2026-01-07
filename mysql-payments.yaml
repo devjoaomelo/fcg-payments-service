@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-payments
+  namespace: fcg
+spec:
+  ports:
+  - port: 3306
+  clusterIP: None
+  selector:
+    app: mysql-payments
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-payments
+  namespace: fcg
+spec:
+  serviceName: mysql-payments
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-payments
+  template:
+    metadata:
+      labels:
+        app: mysql-payments
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: mysql-root-password
+        - name: MYSQL_DATABASE
+          value: fcg_payments
+        - name: MYSQL_USER
+          value: fcg
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: mysql-password
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp2
+      resources:
+        requests:
+          storage: 5Gi
