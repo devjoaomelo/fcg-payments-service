@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fcg-payments
+  namespace: default
+  labels:
+    app: fcg-payments
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fcg-payments
+  template:
+    metadata:
+      labels:
+        app: fcg-payments
+        tier: backend
+    spec:
+      serviceAccountName: fcg-payments-sa
+      containers:
+      - name: payments-api
+        image: 536765581095.dkr.ecr.us-east-2.amazonaws.com/fcg-payments:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ConnectionStrings__PaymentsDb
+          valueFrom:
+            secretKeyRef:
+              name: fcg-payments-secrets
+              key: connection-string
+        - name: Jwt__Key
+          valueFrom:
+            secretKeyRef:
+              name: fcg-shared-secrets
+              key: jwt-key
+        - name: Jwt__Issuer
+          valueFrom:
+            configMapKeyRef:
+              name: fcg-payments-config
+              key: jwt-issuer
+        - name: Jwt__Audience
+          valueFrom:
+            configMapKeyRef:
+              name: fcg-payments-config
+              key: jwt-audience
+        - name: GamesApi__BaseUrl
+          valueFrom:
+            configMapKeyRef:
+              name: fcg-payments-config
+              key: games-api-url
+        - name: AWS__Region
+          value: "us-east-2"
+        - name: Queues__PaymentsRequested
+          valueFrom:
+            configMapKeyRef:
+              name: fcg-payments-config
+              key: sqs-queue-url
+        - name: Notifications__TopicArn
+          valueFrom:
+            configMapKeyRef:
+              name: fcg-payments-config
+              key: sns-topic-arn
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://127.0.0.1:4317"
+        - name: OTEL_SERVICE_NAME
+          value: "FCG.Payments.Api"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      - name: adot-collector
+        image: public.ecr.aws/aws-observability/aws-otel-collector:latest
+        ports:
+        - containerPort: 4317
+          protocol: TCP
+        env:
+        - name: AWS_REGION
+          value: "us-east-2"
+        - name: AWS_OTEL_COLLECTOR_CONFIG_CONTENT
+          value: |
+            receivers:
+              otlp:
+                protocols:
+                  grpc:
+                    endpoint: 0.0.0.0:4317
+            processors:
+              batch: {}
+            exporters:
+              awsxray: {}
+            service:
+              pipelines:
+                traces:
+                  receivers: [otlp]
+                  processors: [batch]
+                  exporters: [awsxray]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

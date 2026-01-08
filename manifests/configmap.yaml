@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fcg-payments-config
+  namespace: default
+data:
+  jwt-issuer: "fcg-users"
+  jwt-audience: "fcg-clients"
+  games-api-url: "http://fcg-games-svc"
+  sqs-queue-url: "https://sqs.us-east-2.amazonaws.com/536765581095/fcg-payments-requested"
+  sns-topic-arn: "arn:aws:sns:us-east-2:536765581095:fcg-notifications"

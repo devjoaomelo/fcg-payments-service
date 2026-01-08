@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-payments
+  namespace: default
+spec:
+  serviceName: mysql-payments
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-payments
+  template:
+    metadata:
+      labels:
+        app: mysql-payments
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-payments-mysql-secrets
+              key: root-password
+        - name: MYSQL_DATABASE
+          value: "fcg_payments"
+        - name: MYSQL_USER
+          value: "fcg"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-payments-mysql-secrets
+              key: user-password
+        volumeMounts:
+        - name: mysql-payments-storage
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-payments-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: gp2
+      resources:
+        requests:
+          storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-payments
+  namespace: default
+spec:
+  clusterIP: None
+  selector:
+    app: mysql-payments
+  ports:
+  - port: 3306
+    targetPort: 3306
+    name: mysql
